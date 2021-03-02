@@ -1,0 +1,19 @@
+#include "mlu.h"
+__mlu_entry__ void gemm16Kernel(half *outputDDR,
+                                half *input1DDR,
+                                half *input2DDR,
+                                uint32_t m,
+                                uint32_t k,
+                                uint32_t n) {
+    half ret;
+    __bang_printf("m=%d,k=%d,n=%d\n",m,k,n);
+    for (uint32_t i = 0; i < m; i++) {
+        for (uint32_t j = 0; j < n; j++) {
+            ret = 0;
+            for (uint32_t t = 0; t < k; t++) {
+               ret += input1DDR[i*k+t] * input2DDR[t*n+j];
+            }
+            outputDDR[i*n+j] = ret;
+        }
+    }
+}
