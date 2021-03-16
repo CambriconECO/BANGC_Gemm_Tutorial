@@ -1,0 +1,113 @@
+#include "mlu.h"
+//#define ROUND 256
+//#define DEBUG 0
+#define NRAM_ARRAY_SIZE 256*256
+#define PAD_UP(x, y) (x / y + static_cast<int>((x) % y > 0)) * y
+#define PAD_DN(x, y) (x / y) * y
+
+#ifdef DEBUG
+#define PRINTF_SCALAR(format, ...) __bang_printf(format, ##__VA_ARGS__)
+#else
+#define PRINTF_SCALAR(format, ...)
+#endif
+
+__mlu_entry__ void gemm16Kernel(half *outputDDR, int8_t *input1DDR, int8_t *input2DDR,
+	uint32_t m, uint32_t k, uint32_t n, int16_t pos) {
+    uint32_t k_aligned = PAD_UP(k, 128);
+    uint32_t n_slice = PAD_DN(NRAM_ARRAY_SIZE / k_aligned, 64);
+    __nram__ int8_t input1NRAM[NRAM_ARRAY_SIZE];
+	__nram__ int8_t input2NRAM[NRAM_ARRAY_SIZE];
+	__nram__ int8_t temp[NRAM_ARRAY_SIZE];
+	__wram__ int8_t input2WRAM[NRAM_ARRAY_SIZE];
+    __nram__ half outputNRAM[NRAM_ARRAY_SIZE];
+    __bang_write_zero(input1NRAM, NRAM_ARRAY_SIZE);
+    __memcpy(input1NRAM, 
+            input1DDR,
+            k * sizeof(int8_t), 
+            GDRAM2NRAM, 
+            k_aligned * sizeof(int8_t), 
+            k * sizeof(int8_t), 
+            m-1);
+    
+    int all_task = n / n_slice;   //因为现在使用16个核同时运算，所以每个核循环的次数也相应减少
+    int all_task_remain = n % n_slice;
+    if (all_task_remain > 0) {
+        all_task++;
+    }
+
+    int task_per_core = all_task / taskDim;
+    int task_per_core_remian = all_task % taskDim;
+
+    int32_t dst_stride = (n_slice * k_aligned / 64) * sizeof(int8_t);
+    int32_t src_stride = k_aligned * sizeof(int8_t);
+    int32_t size = k_aligned * sizeof(int8_t);
+    int32_t total_times = n_slice / 64;
+    
+    PRINTF_SCALAR("taskDim=%d,taskId=%d,n_slice=%d, k_aligned=%d,total_times=%d,all_round=%d\n",taskDim, taskId, n_slice, k_aligned,total_times,all_round);
+    PRINTF_SCALAR("all_round=%d,all_task_remain=%d,task_per_core=%d, task_per_core_remian=%d\n",
+                        all_round, all_task_remain, task_per_core, task_per_core_remian);
+
+    for(int i = 0; i < task_per_core; i++) {
+        int32_t offset = n_slice * (i * taskDim + taskId);
+        //PRINTF_SCALAR("offset=%d\n", offset * k);
+        __bang_write_zero(temp, NRAM_ARRAY_SIZE);
+        __memcpy(temp, 
+                 input2DDR + offset * k,
+                 k * sizeof(int8_t), 
+                 GDRAM2NRAM, 
+                 k_aligned * sizeof(int8_t), 
+                 k * sizeof(int8_t), 
+                 n_slice-1);
+
+        for (int j = 0; j < total_times; j++) {
+            __memcpy(input2NRAM + j * k_aligned, temp + j * 64 * k_aligned,
+                        size, NRAM2NRAM, dst_stride, src_stride, 64 - 1);
+        }
+        __memcpy(input2WRAM, input2NRAM, n_slice*k_aligned*sizeof(int8_t), NRAM2WRAM);
+        __bang_conv(outputNRAM, input1NRAM, input2WRAM, k_aligned, m, 1, 1, 1, 1, 1, n_slice, pos);
+        /*__memcpy(outputDDR + offset, 
+            outputNRAM,
+            n_slice * sizeof(half), 
+            NRAM2GDRAM, 
+            n * sizeof(half), 
+            n_slice * sizeof(half), 
+            m-1);*/
+
+        for (int j = 0; j < m; j++) {
+            __memcpy(outputDDR + offset + j * n,
+                        outputNRAM + j * n_slice, 
+                        n_slice * sizeof(half), 
+                        NRAM2GDRAM);
+        }
+    }
+    if (taskId < task_per_core_remian) {
+        int32_t remain_part = n_slice;
+        int32_t offset = n_slice * (task_per_core * taskDim + taskId);
+
+        if (taskId == (task_per_core_remian - 1)  && all_task_remain > 0) remain_part = all_task_remain;
+        PRINTF_SCALAR("remain_part=%d,\n",remain_part);
+        __bang_write_zero(temp, NRAM_ARRAY_SIZE);
+        __memcpy(temp, 
+            input2DDR + offset * k,
+            k * sizeof(int8_t), 
+            GDRAM2NRAM, 
+            k_aligned * sizeof(int8_t), 
+            k * sizeof(int8_t), 
+            remain_part-1);
+
+        for (int j = 0; j < total_times; j++) {
+            __memcpy(input2NRAM + j * k_aligned, temp + j * 64 * k_aligned,
+                        size, NRAM2NRAM, dst_stride, src_stride, 64 - 1);
+        }
+        __memcpy(input2WRAM, input2NRAM, n_slice*k_aligned*sizeof(int8_t), NRAM2WRAM);
+        __bang_conv(outputNRAM, input1NRAM, input2WRAM, k_aligned, m, 1, 1, 1, 1, 1, n_slice, pos);
+        for (int j = 0; j < m; j++) {
+            __memcpy(outputDDR + offset + j * n,
+                        outputNRAM + j * n_slice, 
+                        remain_part * sizeof(half), 
+                        NRAM2GDRAM);
+        }
+    }
+}
+
+    

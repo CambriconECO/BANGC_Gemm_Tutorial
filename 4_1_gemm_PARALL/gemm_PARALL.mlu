@@ -1,0 +1,37 @@
+#include "mlu.h"
+#define ROUND 256
+#define NRAM_ARRAY_SIZE 256*256
+__mlu_entry__ void gemm16Kernel(half *outputDDR, int8_t *input1DDR, int8_t *input2DDR,
+	uint32_t m, uint32_t k, uint32_t n, int16_t pos) {
+	__nram__ int8_t input1NRAM[NRAM_ARRAY_SIZE];
+	__nram__ int8_t input2NRAM[NRAM_ARRAY_SIZE];
+	__nram__ int8_t input2NRAM_tmp[NRAM_ARRAY_SIZE];
+	__wram__ int8_t input2WRAM[NRAM_ARRAY_SIZE];
+	__nram__ half outputNRAM[NRAM_ARRAY_SIZE];
+	__memcpy(input1NRAM, input1DDR, m * k * sizeof(int8_t), GDRAM2NRAM); 
+							//在这里将左矩阵一次性拷入NRAM
+	
+    int all_round = n / ( taskDim * ROUND);   //因为现在使用16个核同时运算，所以每个核循环的次数也相应减少
+    int32_t dst_stride = (ROUND * k / 64) * sizeof(int8_t);
+    int32_t src_stride = k * sizeof(int8_t);
+    int32_t size = k * sizeof(int8_t);
+    int32_t total_times = ROUND / 64;
+    
+    //__bang_printf("taskDim=%d,taskId=%d\n",taskDim, taskId);
+    for(int i = 0; i < all_round; i++) {
+        __memcpy(input2NRAM_tmp, input2DDR + ROUND * (i * taskDim + taskId) * k ,   //只涉及这个核需要的数据
+                    k * ROUND * sizeof(int8_t), GDRAM2NRAM);
+        for (int j = 0; j < total_times; j++) {
+            __memcpy(input2NRAM + j * k, input2NRAM_tmp + j * 64 * k,
+                        size, NRAM2NRAM, dst_stride, src_stride, 64 - 1);
+        }
+        __memcpy(input2WRAM, input2NRAM, ROUND*k*sizeof(int8_t), NRAM2WRAM);
+        __bang_conv(outputNRAM, input1NRAM, input2WRAM, k, m, 1, 1, 1, 1, 1, ROUND, pos);
+        for (int j = 0; j < m; j++) {                                 //向GDRAM回写的时候也要注意每个核的位置不同
+            __memcpy(outputDDR + (i * taskDim + taskId) * ROUND + j * n,   
+                        outputNRAM + j * ROUND, ROUND * sizeof(half), NRAM2GDRAM);
+        }
+    }
+}
+
+    

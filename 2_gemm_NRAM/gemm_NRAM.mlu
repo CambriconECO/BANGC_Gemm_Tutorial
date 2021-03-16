@@ -1,0 +1,27 @@
+#include "mlu.h"
+__mlu_entry__ void gemm16Kernel(half *outputDDR, half *input1DDR, half *input2DDR,
+                                uint32_t m, uint32_t k, uint32_t n) {
+	__nram__ half input1NRAM[256*256];
+	__nram__ half input2NRAM[256*256];
+	__nram__ half outputNRAM[256*256];
+	__memcpy(input1NRAM, input1DDR, m * k * sizeof(half), GDRAM2NRAM);  //从 GDRAM拷入NRAM
+	__memcpy(input2NRAM, input2DDR, k * n * sizeof(half), GDRAM2NRAM);
+
+    for (uint32_t i = 0; i < m; i++) {
+        for (uint32_t j = 0; j < n; j++) {
+            half ret = 0.0;
+            half c = 0.0;
+            for (uint32_t t = 0; t < k; t++) {
+                half v = input1NRAM[i*k+t] * input2NRAM[t*n+j];
+                half y = v - c;
+                half temp = ret + y;
+                c = ( temp - ret) - y;
+                ret = temp;
+            }
+            outputNRAM[i*n+j] = ret;
+        }
+    }
+	__memcpy(outputDDR, outputNRAM, m * n * sizeof(half), NRAM2GDRAM);  //将计算结果拷回GDRAM
+}
+
+
