@@ -218,7 +218,6 @@ int Mlu_gemm(float *A, float *B, float *C, int32_t M, int32_t N, int32_t K,float
   gettimeofday(&start, NULL);
 
   CNRT_CHECK(cnrtPlaceNotifier(notifier_start, pQueue));   // Places a notifier in specified queue
-  printf("M:%d K:%d N:%d\n", M, K, N_align);
   CNRT_CHECK(cnrtInvokeKernel_V3((void *)&gemm16Kernel,init_param, dim, params, func_type, pQueue, NULL));   // Invokes a kernel written in Bang with given params on MLU
   CNRT_CHECK(cnrtPlaceNotifier(notifier_end, pQueue));     // Places a notifier in specified queue
 

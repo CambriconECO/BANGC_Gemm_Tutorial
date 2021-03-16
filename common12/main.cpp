@@ -112,7 +112,6 @@ int testCase(int M, int N, int K) {
   gettimeofday(&end, NULL);
   time_use = ((end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec)) /1000.0;   // 计算耗费时间，单位是ms
 
-  printf("\nBefore TestCase M %6d, K %6d, N %10d\n", M, K, N);
 #define COUNT 1
   // TODO: add mlu
   float return_time = 0.0;
@@ -126,7 +125,6 @@ int testCase(int M, int N, int K) {
                 1000.0;
   }
   time_use /= COUNT;
-  printf("\nAfter TestCase M %6d, K %6d, N %10d\n", M, K, N);
   //printf("\nmlu total time use %.3f ms \n", time_use);
   //printf("A:%d x %d\n", M, K);
   //printf("B:%d x %d\n", K, N);
@@ -157,7 +155,7 @@ int testCase(int M, int N, int K) {
   free(A);
   free(B);
   free(C);
-  printf("\nTestCase M %6d, K %6d, N %10d end , time=%4.3f ms, err= %4.5f%%\n", M, K, N,return_time,sum_err*100.0/sum);
+  //printf("\nTestCase M %6d, K %6d, N %10d end , time=%4.3f ms, err= %4.5f%%\n", M, K, N,return_time,sum_err*100.0/sum);
   print_info(M,N,K,16,return_time, sum_err/sum);
 
   return 0;
