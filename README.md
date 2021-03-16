@@ -14,4 +14,4 @@ bash run.sh
 
 #### 3、运行结果部分截图
 
-![](E:\教程demo-1.6\gemm_demo\gemm_result.png)
+![Image text](https://raw.githubusercontent.com/CambriconECO/BANGC_Gemm_Tutorial/master/gemm_result.png)
