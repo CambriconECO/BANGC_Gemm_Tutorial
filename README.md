@@ -2,7 +2,9 @@
 
 #### 1、介绍
 
-此demo是使用BANGC重新实现了矩阵乘算子。其中使用了不同的方法逐次优化程序，可作为BANGC的入门教程。
+此demo是使用BANGC重新实现了矩阵乘算子。在其中使用了不同的方法逐次优化程序，可作为BANGC的入门教程。
+
+教程链接：https://developer.cambricon.com/index/curriculum/expdetails/id/8/classid/8.html
 
 #### 2、编译
 
