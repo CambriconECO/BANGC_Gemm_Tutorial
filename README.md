@@ -26,4 +26,4 @@ time consume: 硬件执行时间
 
 abs diff rate: MLU与CPU计算结果误差
 
-![Image text](https://raw.githubusercontent.com/CambriconECO/BANGC_Gemm_Tutorial/master/gemm_result.png)
+![Image text](https://github.com/CambriconECO/BANGC_Gemm_Tutorial/blob/master/gemm_result.png)
